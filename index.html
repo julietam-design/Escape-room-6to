@@ -415,29 +415,61 @@ function sfxBossGrowl(){ beep(220,90,0,0.14); beep(180,90,90,0.14); beep(140,180
 function sfxUnlock(){ beep(440,140); beep(550,140,150); beep(660,160,300); beep(880,420,460,0.2); }
 
 /* ============ SALA / CONEXIÓN ============ */
+let sede = null;
+function renderSedeGate(){
+  document.getElementById('titlebarLabel').textContent = 'select_venue.exe';
+  document.getElementById('stageContent').innerHTML =
+    '<div class="eyebrow">CONEXIÓN AL SERVIDOR // WECODE</div>'
+    + '<h1>¿En qué sede están jugando?</h1>'
+    + '<p>Escriban el mismo nombre de sede que el resto de los equipos que juegan hoy en el mismo lugar (por ejemplo: pocitos o costa). Así no se mezclan con otra sede que esté jugando al mismo tiempo en otro lugar.</p>'
+    + '<div class="answer-row"><input type="text" id="sedeInput" placeholder="nombre de la sede..." onkeydown="if(event.key===\'Enter\') confirmSede()">'
+    + '<button class="btn" onclick="confirmSede()">CONTINUAR</button></div>'
+    + '<div class="feedback" id="sedeFeedback"></div>';
+}
+function confirmSede(){
+  const raw = document.getElementById('sedeInput').value.trim().toLowerCase();
+  const val = raw.replace(/[^a-z0-9]/g,'');
+  const fb = document.getElementById('sedeFeedback');
+  if(!val){
+    fb.className='feedback err shake'; fb.textContent='✖ Escribí el nombre de la sede para continuar.';
+    setTimeout(()=> fb.classList.remove('shake'), 400);
+    return;
+  }
+  sede = val;
+  renderLobby();
+}
 function renderLobby(){
   document.getElementById('titlebarLabel').textContent = 'select_room.exe';
   document.getElementById('stageContent').innerHTML =
-    '<div class="eyebrow">CONEXIÓN AL SERVIDOR // WECODE</div>'
+    '<div class="eyebrow">CONEXIÓN AL SERVIDOR // WECODE // SEDE: '+sede.toUpperCase()+'</div>'
     + '<h1>Elegí la sala de tu equipo</h1>'
     + '<p>Los dos integrantes del equipo (JUGADOR 1 y JUGADOR 2) tienen que elegir la <b>misma sala</b>, cada uno desde su propia computadora, para sincronizarse.</p>'
-    + '<div class="chip-row">'+[1,2,3,4,5,6].map(n=>'<button class="btn ghost" onclick="joinRoom(\'equipo'+n+'\')">EQUIPO '+n+'</button>').join('')+'</div>'
+    + '<div class="chip-row">'+[1,2,3,4,5,6,7,8].map(n=>'<button class="btn ghost" onclick="joinRoom(\'equipo'+n+'\')">EQUIPO '+n+'</button>').join('')+'</div>'
     + '<p class="muted" style="margin-top:18px;">¿Sos el/la docente y necesitás reiniciar una sala ya usada? <button class="hint-toggle" onclick="teacherReset()">Reiniciar una sala…</button></p>';
 }
+const TEACHER_PASSWORD = 'Aprogramar1'; // reemplazar antes del evento
 function teacherReset(){
-  const id = prompt('¿Qué sala querés reiniciar? (equipo1 a equipo6)');
+  const pwd = prompt('Ingresá la clave de docente para reiniciar una sala:');
+  if(pwd === null) return;
+  if(pwd.trim().toUpperCase() !== TEACHER_PASSWORD.toUpperCase()){
+    alert('Clave incorrecta. No se reinició ninguna sala.');
+    return;
+  }
+  const id = prompt('¿Qué equipo de la sede "'+sede+'" querés reiniciar? (equipo1 a equipo8)');
   if(!id) return;
-  if(confirm('Esto borra todo el progreso de "'+id+'". ¿Confirmás?')){
-    db.ref('rooms_5to6to/'+id).remove().then(()=> alert('Sala "'+id+'" reiniciada.'));
+  const fullId = sede+'-'+id;
+  if(confirm('Esto borra todo el progreso de "'+fullId+'". ¿Confirmás?')){
+    db.ref('rooms_5to6to/'+fullId).remove().then(()=> alert('Sala "'+fullId+'" reiniciada.'));
   }
 }
+let initialLoadHandled = false;
 function joinRoom(id){
-  roomId = id;
+  roomId = sede+'-'+id;
   document.getElementById('titlebarLabel').textContent = 'connecting.exe';
   document.getElementById('stageContent').innerHTML = '<p class="muted">Conectando a la sala '+id+'…</p>';
   const badge = document.getElementById('roomBadge');
   badge.style.display = 'inline-flex';
-  document.getElementById('roomBadgeText').textContent = id.toUpperCase();
+  document.getElementById('roomBadgeText').textContent = sede.toUpperCase()+' / '+id.toUpperCase();
   db.ref('rooms_5to6to/'+roomId).on('value', onRoomUpdate);
   db.ref('.info/connected').on('value', snap=>{
     document.getElementById('connDot').classList.toggle('live', snap.val()===true);
@@ -445,6 +477,14 @@ function joinRoom(id){
 }
 function onRoomUpdate(snap){
   const val = snap.val() || {};
+  if(!initialLoadHandled){
+    initialLoadHandled = true;
+    if(val.lockOpened === true){
+      // esta sala ya tuvo una partida terminada antes: la limpiamos para arrancar de cero
+      db.ref('rooms_5to6to/'+roomId).remove();
+      return;
+    }
+  }
   remoteState = {
     missionStarted: !!val.missionStarted,
     endsAt: val.endsAt || null,
@@ -470,6 +510,7 @@ function onRoomUpdate(snap){
     }
   }
 }
+
 function startMission(){
   db.ref('rooms_5to6to/'+roomId).transaction(cur=>{
     cur = cur || {};
@@ -1282,7 +1323,7 @@ function buildPixelGrid(){
 
 document.getElementById('roleBadge').textContent = '🎮 JUGADOR ' + ROLE;
 document.getElementById('roleBadge').className = 'role-badge ' + (ROLE===1 ? 'h1' : 'h2');
-renderLobby();
+renderSedeGate();
 </script>
 </body>
 </html>
